@@ -1,15 +1,24 @@
 TARGET=laplace_equation
 INCDIR= -I ./
 
+MODE = PARALLEL
+CMD = mpirun
 FLAG :=-fopenmp
-CPP := g++
-FILES := main.cpp jacobi_serial.cpp
+CXX := mpicxx
+FILES := main.cpp
+ifeq ($(MODE),PARALLEL)
+    FILES += jacobi_parallel.cpp
+else
+    FILES += jacobi_serial.cpp
+    CMD = 
+    CXX = g++
+endif
 
 all: $(TARGET)
 	
 
 $(TARGET): $(FILES)
-	$(CPP) $(FLAG) $(FILES) -o  $@
+	$(CXX) $(FLAG) $(FILES) -o  $@
 
 help:
 	@echo "Makefile for TARGET."
@@ -17,9 +26,9 @@ help:
 	@echo "Output should be: "$(TARGET)
 	@echo "Usage: make [ help | all | run | clean ] " 
 	@echo
- 
+
 run:
-	./$(TARGET)
-        
+	$(CMD) ./$(TARGET)
+
 clean:
 	rm -f $(TARGET)
