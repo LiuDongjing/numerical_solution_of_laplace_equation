@@ -3,6 +3,9 @@ INCDIR= -I ./
 
 INFO = 0
 MODE = PARALLEL
+# 为了避免和其他同学的mpi命令混淆，自己添加了两个脚本，
+# mpi_run指向/public/home/test/LiuDongjing/bin/mpi_run.sh；
+# mpi_compile指向/public/home/test/LiuDongjing/bin/mpi_compile.sh
 CMD = mpi_run
 FLAG :=-fopenmp
 CXX := mpi_compile
