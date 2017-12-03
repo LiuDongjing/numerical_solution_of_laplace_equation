@@ -6,6 +6,19 @@
 #include <assert.h>
 #include <cstdio>
 using namespace std;
+#ifdef INFO
+void print_array(float *data, int rows, int cols, int rank) {
+    printf("\n***%d***\n", rank);
+    for(int i = 0; i < rows; i++) {
+        for(int j = 0; j < cols; j++) {
+            printf("%7.3f ", data[i*cols+j]);
+        }
+        printf("\n");
+    }
+    printf("\n********\n");
+}
+#endif
+
 float solve_part_equations(float *p0, float *pk, int rows, int cols) {
     float max_dif = -INFINITY;
     #pragma omp parallel for collapse(2) reduction (max:max_dif)
@@ -18,16 +31,6 @@ float solve_part_equations(float *p0, float *pk, int rows, int cols) {
     }
     return max_dif;
 }
-void print_array(float *arr, int rows, int cols, int rank) {
-    printf("\n*****%d*****\n", rank);
-    for(int i = 0; i < rows; i++) {
-        for(int j = 0; j < cols; j++) {
-            printf("%7.3f ", arr[i*cols+j]);
-        }
-        printf("\n");
-    }
-    printf("\n************\n");
-}
 void solve_equations(float* T, int length, float tolerance) {
     int world_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
@@ -38,7 +41,7 @@ void solve_equations(float* T, int length, float tolerance) {
         Tn = new float[length*length];
         memcpy(Tn, T, sizeof(float)*length*length);
     }
-
+    assert(world_size <= length);
     // 为每个进程分配计算数据；发送时，行相邻的数据重叠两行；接收时数据无重叠
     int *sendcounts = new int[world_size];
     int *senddispls = new int[world_size];
@@ -81,6 +84,9 @@ void solve_equations(float* T, int length, float tolerance) {
             memcpy(part0, data0+senddispls[world_rank], sizeof(float)*sendcounts[world_rank]);
             max_dif = max(max_dif, solve_part_equations(
                 part0, partk, sendcounts[world_rank]/length, length));
+#ifdef INFO
+            print_array(part0, sendcounts[world_rank]/length, length, world_rank);
+#endif
             memcpy(datak+senddispls[world_rank], partk, sizeof(float)*sendcounts[world_rank]);
             for(int i = 1; i < world_size; i++) {
                 MPI_Recv(datak+recvdispls[i], recvcounts[i],
@@ -89,7 +95,7 @@ void solve_equations(float* T, int length, float tolerance) {
                 MPI_Recv(&dif, 1, MPI_FLOAT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 max_dif = max(max_dif, dif);
             }
-            printf("max_dif: %f.\n", max_dif);
+            printf("%f --> %f\n", max_dif, tolerance);
             if(max_dif <= tolerance) {
                 break;
             }
@@ -118,6 +124,9 @@ void solve_equations(float* T, int length, float tolerance) {
                     MPI_FLOAT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             float dif = solve_part_equations(
                 part0, partk, sendcounts[world_rank]/length, length);
+#ifdef INFO
+            print_array(part0, sendcounts[world_rank]/length, length, world_rank);
+#endif
             memcpy(datak+senddispls[world_rank], partk, sizeof(float)*sendcounts[world_rank]);
             MPI_Send(datak+recvdispls[world_rank], recvcounts[world_rank],
                     MPI_FLOAT, 0, 0, MPI_COMM_WORLD);

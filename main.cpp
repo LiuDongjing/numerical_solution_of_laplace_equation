@@ -1,26 +1,28 @@
 #include <iostream>
 #include <sstream>
-#include <vector>
 #include <cstdio>
+#include <ctime>
+#include <assert.h>
 
 #ifdef PARALLEL
 #include <mpi.h>
 #endif
 
-#define C0 100
-#define C1 100
-#define C2 100
-#define C3 0
+#define OUTPUT_FILE "result.txt"
 
 using namespace std;
-#ifdef PARALLEL
-void solve_equations(float* T, int length, float tolerance=1e-3);
-#else
-vector<vector<float> > &solve_equations(vector<vector<float> > &T, float tolerance=1e-3);
-#endif
 
+void solve_equations(float* T, int length, float tolerance=1e-3);
+int str2int(char *chs) {
+    int t;
+    stringstream cvt;
+    cvt << chs;
+    cvt >> t;
+    return t;
+}
 int main(int argc, char *argv[]) {
     int node_num = 10;//一行内部节点的数量
+    int C0 = 100, C1 = 100, C2 = 100, C3 = 0;
 #ifdef PARALLEL
     MPI_Init(&argc, &argv);
     int world_rank;
@@ -31,44 +33,55 @@ int main(int argc, char *argv[]) {
         printf("size: %d.\n", world_size);
     }
 #endif
-    if(argc > 1) {
-        stringstream cvt;
-        cvt << argv[1];
-        cvt >> node_num;
-    }
-    //在内部节点外加一层边界节点，并初始化边界节点
-    vector<vector<float> > T(node_num+2, vector<float>(node_num+2, 0));
-    for(int j=1; j < node_num+1; j++) T[0][j] = C0;
-    for(int i=1; i < node_num+1; i++) T[i][0] = C1;
-    for(int j=1; j < node_num+1; j++) T[node_num+1][j] = C2;
-    for(int i=1; i < node_num+1; i++) T[i][node_num+1] = C3;
-#ifdef PARALLEL
-    int length = T.size();
-    float *T0 = new float[length*length];
-    for(int i = 0; i < length; i++) {
-        for(int j = 0; j < length; j++) {
-            T0[i*length+j] = T[i][j];
+    if(argc >= 2) {
+        node_num = str2int(argv[1]);
+        if(argc >= 6) {
+            C0 = str2int(argv[2]);
+            C1 = str2int(argv[3]);
+            C2 = str2int(argv[4]);
+            C3 = str2int(argv[5]);
         }
     }
+    // 
+    int length = node_num + 2;
+    float *T = new float[length*length];
+    for(int i = 0; i < length; i++) {
+        for(int j = 0; j < length; j++) {
+            T[i*length+j] = 0;
+        }
+    }
+    for(int j=0; j < length; j++) T[j] = C0;
+    for(int i=0; i < length; i++) T[i*length] = C1;
+    for(int j=0; j < length; j++) T[(node_num+1)*length+j] = C2;
+    for(int i=0; i < length; i++) T[i*length+node_num+1] = C3;
+    const clock_t begin_time = clock();
+#ifdef PARALLEL
     if(world_rank == 0) {
-        solve_equations(T0, length);
+#endif
+        printf("\nNodes: %d, C0: %d, C1: %d, C2: %d, C3: %d.\n",
+        node_num, C0, C1, C2, C3);
+#ifdef INFO
         for(int i = 0; i < length; i++) {
             for(int j = 0; j < length; j++) {
-                printf("%7.3f ", T0[i*length+j]);
+                printf("%7.3f ", T[i*length+j]);
             }
             printf("\n");
         }
+#endif
+        solve_equations(T, length);
+	FILE *fh = fopen(OUTPUT_FILE, "w");
+        for(int i = 0; i < length; i++) {
+            for(int j = 0; j < length; j++) {
+                fprintf(fh, "%7.3f ", T[i*length+j]);
+            }
+            fprintf(fh, "\n");
+        }
+	fclose(fh);
+        printf("\nTotal time cost: %0.2f.\n", float(clock()-begin_time) / CLOCKS_PER_SEC);
+#ifdef PARALLEL
     }
     else {
-        solve_equations(T0, length);
-    }
-#else
-    vector<vector<float> > result = solve_equations(T);
-    for(int i = 0; i < result.size(); i++) {
-        for(int j = 0; j < result.size(); j++) {
-            printf("%7.3f ", result[i][j]);
-        }
-        printf("\n");
+        solve_equations(T, length);
     }
 #endif
     return 0;
